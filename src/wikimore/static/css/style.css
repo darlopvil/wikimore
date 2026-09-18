@@ -655,51 +655,64 @@ figcaption,
     height: auto;
 }
 
-/* General styling for gallery */
-.mw-gallery-packed {
+/* Galleries: all modes (traditional, nolines, packed, packed-hover...) */
+ul.gallery {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
+    align-items: flex-start;
     padding: 0;
-    list-style-type: none;
+    margin: 1em 0;
+    list-style: none;
+}
+
+ul.gallery.mw-gallery-packed,
+ul.gallery.mw-gallery-packed-hover,
+ul.gallery.mw-gallery-packed-overlay {
+    justify-content: center;
+}
+
+ul.gallery .gallerybox {
+    margin: 2px;
+    padding: 0;
+    list-style: none;
+    max-width: 100%;
+}
+
+/* Undo the generic floating-thumbnail .thumb rules inside galleries;
+   width/height come inline from Parsoid */
+ul.gallery .gallerybox .thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     margin: 0;
-}
-
-.mw-gallery-packed .gallerybox {
-    margin: 5px;
-    flex: 0 1 auto;
-}
-
-.mw-gallery-packed .thumb {
+    padding: 0;
+    overflow: hidden;
     background-color: #f9f9f9;
     border: 1px solid #ddd;
-    padding: 5px;
-    text-align: center;
 }
 
-.mw-gallery-packed .thumb img {
+ul.gallery .gallerybox .thumb img {
     max-width: 100%;
     height: auto;
+    margin: 0;
+    padding: 0;
+    border: none;
     display: block;
 }
 
-.mw-gallery-packed .gallerytext {
-    text-align: center;
+ul.gallery .gallerytext {
     font-size: 0.9em;
-    padding: 5px;
+    padding: 4px 2px;
+    overflow-wrap: break-word;
+    text-align: left;
 }
 
-.mw-gallery-packed .gallerytext i {
-    font-style: italic;
-}
-
-.mw-gallery-packed .gallerytext a {
-    color: #1e90ff;
-    text-decoration: none;
-}
-
-.mw-gallery-packed .gallerytext a:hover {
-    text-decoration: underline;
+ul.gallery.mw-gallery-packed .gallerytext,
+ul.gallery.mw-gallery-packed-hover .gallerytext,
+ul.gallery.mw-gallery-packed-overlay .gallerytext {
+    text-align: center;
 }
 
 /* Reference styling */
@@ -1182,18 +1195,8 @@ Currently blocked by implementation of comments retrieval in the backend
         clear: none;
     }
 
-    .mw-gallery-packed {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .mw-gallery-packed .gallerybox {
-        width: 100%;
-        max-width: 300px;
-    }
-
-    .mw-gallery-packed .thumb {
-        max-width: 100%;
+    ul.gallery {
+        justify-content: center;
     }
 
     #ws-index-container {

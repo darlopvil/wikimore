@@ -162,9 +162,28 @@ body.dark-mode {
 }
 
 /* Gallery styling */
-.dark-mode .mw-gallery-packed .thumb {
+.dark-mode ul.gallery .gallerybox .thumb {
     background-color: var(--dark-sidebar-bg);
     border: 1px solid var(--dark-border-color);
+}
+
+/* Transparent images (SVG drawings, diagrams) are unreadable on a dark
+   background: give them a white canvas, like Wikipedia's night mode.
+   Images marked for inversion are excluded (they get inverted instead) */
+.dark-mode img.mw-file-element:not(.skin-invert):not(.mw-invert) {
+    background-color: #fff;
+}
+
+.dark-mode .skin-invert-image img.mw-file-element {
+    background-color: transparent;
+}
+
+/* Wikipedia marks black-on-transparent content (math formulas, some
+   diagrams) with these classes so night mode inverts it */
+.dark-mode .skin-invert,
+.dark-mode .mw-invert,
+.dark-mode .skin-invert-image img {
+    filter: invert(1) hue-rotate(180deg);
 }
 
 /* Side box styling */
