@@ -442,10 +442,26 @@ def render_template(*args, **kwargs) -> Text:
     )
 
 
+# Single source of truth for what the local proxy is allowed to fetch.
+# Used both when rewriting URLs (get_proxy_url) and when serving them (/proxy).
+PROXY_ALLOWED_PREFIXES = (
+    "https://upload.wikimedia.org/",  # original files and legacy thumbnails
+    "https://thumb.wikimedia.org/",  # article thumbnails
+    "https://maps.wikimedia.org/",  # map tiles and static maps
+    "https://wikimedia.org/api/rest_v1/media/math/render/",  # rendered <math> formulas
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/",  # badges (redirects to upload.)
+)
+
+
+def is_proxyable_url(url: str) -> bool:
+    """Check whether a URL may be fetched through the local proxy."""
+    return url.startswith(PROXY_ALLOWED_PREFIXES)
+
+
 def get_proxy_url(url: str) -> str:
     """Generate a proxy URL for a given URL.
 
-    Will only generate a proxy URL for URLs that are on Wikimedia Commons or Wikimedia Maps.
+    Will only generate a proxy URL for URLs covered by PROXY_ALLOWED_PREFIXES.
     For other URLs, the original URL is returned.
 
     Args:
@@ -457,9 +473,7 @@ def get_proxy_url(url: str) -> str:
     if url.startswith("//"):
         url = "https:" + url
 
-    if not url.startswith("https://upload.wikimedia.org/") and not url.startswith(
-        "https://maps.wikimedia.org/"
-    ):
+    if not is_proxyable_url(url):
         logger.debug(f"Not generating proxy URL for {url}")
         return url
 
@@ -467,27 +481,94 @@ def get_proxy_url(url: str) -> str:
     return f"/proxy?{urlencode({'url': url})}"
 
 
-@app.route("/proxy")
-def proxy() -> bytes:
-    """A simple proxy for Wikimedia Commons and Wikimedia Maps URLs.
+def get_proxy_srcset(srcset: str) -> str:
+    """Rewrite every candidate of a srcset attribute through the local proxy.
+
+    Candidates that cannot be proxied are dropped rather than kept, so the
+    browser never picks a direct Wikimedia URL (e.g. on high-DPI screens).
+    Parsing follows the HTML srcset rules: the URL runs until whitespace
+    (a trailing comma ends the candidate), then an optional descriptor
+    ("2x", "250w") runs until the next comma.
+
+    Args:
+        srcset (str): The original srcset value.
 
     Returns:
-        bytes: The content of the proxied URL.
+        str: The rewritten srcset, or an empty string if no candidate is left.
+    """
+    candidates = []
+    pos, length = 0, len(srcset)
+
+    while pos < length:
+        while pos < length and (srcset[pos].isspace() or srcset[pos] == ","):
+            pos += 1
+        if pos >= length:
+            break
+
+        start = pos
+        while pos < length and not srcset[pos].isspace():
+            pos += 1
+        url = srcset[start:pos]
+        descriptor = ""
+
+        if url.endswith(","):
+            url = url.rstrip(",")
+        else:
+            start = pos
+            while pos < length and srcset[pos] != ",":
+                pos += 1
+            descriptor = srcset[start:pos].strip()
+
+        proxied = get_proxy_url(url) if url else ""
+        if proxied.startswith("/proxy?"):
+            candidates.append(f"{proxied} {descriptor}".strip())
+        else:
+            logger.debug(f"Dropping unproxyable srcset candidate: {url}")
+
+    return ", ".join(candidates)
+
+
+@app.route("/proxy")
+def proxy() -> Response:
+    """A simple proxy for the Wikimedia media hosts in PROXY_ALLOWED_PREFIXES.
+
+    Forwards the upstream Content-Type (SVGs are not rendered in <img>
+    without image/svg+xml) and lets the browser cache the result, so
+    reloads don't hit Wikimedia again.
+
+    Returns:
+        Response: The content of the proxied URL.
     """
     url = request.args.get("url")
 
-    if not url or not (
-        url.startswith("https://upload.wikimedia.org/")
-        or url.startswith("https://maps.wikimedia.org/")
-    ):
+    if not url or not is_proxyable_url(url):
         logger.error(f"Invalid URL for proxying: {url}")
-        return "Invalid URL"
+        return Response("Invalid URL", status=400, mimetype="text/plain")
 
     logger.debug(f"Proxying {url}")
 
-    with urlopen(url) as response:
-        data = response.read()
-    return data
+    # Forward the browser's Accept header so Wikimedia can negotiate
+    # lighter formats (WebP) just like it would for a direct request
+    headers = {"Accept": request.headers.get("Accept", "image/*,*/*;q=0.8")}
+
+    try:
+        with urlopen_with_retry(url, headers=headers, max_retries=1, timeout=30) as response:
+            data = response.read()
+            content_type = response.headers.get("Content-Type", "application/octet-stream")
+    except urllib.error.HTTPError as e:
+        logger.warning(f"Upstream HTTP {e.code} while proxying {url}")
+        return Response(status=e.code)
+    except (urllib.error.URLError, TimeoutError) as e:
+        logger.warning(f"Upstream error while proxying {url}: {e}")
+        return Response(status=502)
+
+    proxied = Response(data, content_type=content_type)
+    proxied.headers["Cache-Control"] = "public, max-age=604800"
+    proxied.headers["X-Content-Type-Options"] = "nosniff"
+    # Proxied SVGs are served from our origin: never let them run scripts
+    # if opened directly. Has no effect on normal <img> rendering.
+    proxied.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    return proxied
 
 
 @app.route("/")
@@ -1065,18 +1146,28 @@ def wiki_article(
     for style in soup.find_all("style"):
         style.decompose()
 
-    # Proxy images and videos
+    # Proxy images and videos (src, srcset and poster)
     for img in soup.find_all("img"):
-        img["src"] = get_proxy_url(img["src"])
+        if img.get("src"):
+            img["src"] = get_proxy_url(img["src"])
 
         # While we're at it, ensure that images are loaded lazily
         img["loading"] = "lazy"
 
     for source in soup.find_all("source"):
-        source["src"] = get_proxy_url(source["src"])
+        if source.get("src"):
+            source["src"] = get_proxy_url(source["src"])
+
+    for element in soup.find_all(["img", "source"], srcset=True):
+        proxied_srcset = get_proxy_srcset(element["srcset"])
+        if proxied_srcset:
+            element["srcset"] = proxied_srcset
+        else:
+            del element["srcset"]
 
     for video in soup.find_all("video"):
-        video["poster"] = get_proxy_url(video["poster"])
+        if video.get("poster"):
+            video["poster"] = get_proxy_url(video["poster"])
 
     # Convert category elements to links
     for link in soup.find_all("link", rel="mw:PageProp/Category"):
