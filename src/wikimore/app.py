@@ -11,6 +11,7 @@ import urllib.request
 from urllib.parse import urlencode, urlparse, quote
 from html import escape
 import json
+import re
 import os
 import sys
 import logging
@@ -885,6 +886,96 @@ def fetch_license_info(base_url, title):
     return license
 
 
+# Inline background colors (template styles like "background-color:#eee")
+# are designed for a light theme. They are classified here so dark mode can
+# restyle them in CSS: light neutral grays become the theme's dark surface,
+# light colored backgrounds keep their color but get dark text.
+INLINE_BG_PATTERN = re.compile(r"background(?:-color)?\s*:\s*([^;]+)", re.IGNORECASE)
+
+NAMED_LIGHT_COLORS = {
+    "white": (255, 255, 255),
+    "whitesmoke": (245, 245, 245),
+    "gainsboro": (220, 220, 220),
+    "lightgray": (211, 211, 211),
+    "lightgrey": (211, 211, 211),
+    "silver": (192, 192, 192),
+    "ghostwhite": (248, 248, 255),
+    "snow": (255, 250, 250),
+    "ivory": (255, 255, 240),
+    "beige": (245, 245, 220),
+    "lavender": (230, 230, 250),
+    "aliceblue": (240, 248, 255),
+    "azure": (240, 255, 255),
+    "honeydew": (240, 255, 240),
+    "mintcream": (245, 255, 250),
+    "linen": (250, 240, 230),
+    "lightblue": (173, 216, 230),
+    "lightcyan": (224, 255, 255),
+    "lightgreen": (144, 238, 144),
+    "lightyellow": (255, 255, 224),
+    "lightpink": (255, 182, 193),
+    "lemonchiffon": (255, 250, 205),
+    "papayawhip": (255, 239, 213),
+    "wheat": (245, 222, 179),
+}
+
+
+def parse_css_color(value: str):
+    """Parse a CSS color token into an (r, g, b) tuple, or None if unsupported."""
+    value = value.strip().lower()
+
+    if value.startswith("#"):
+        hex_digits = value[1:]
+        if len(hex_digits) in (3, 4):
+            hex_digits = "".join(c * 2 for c in hex_digits[:3])
+        elif len(hex_digits) in (6, 8):
+            hex_digits = hex_digits[:6]
+        else:
+            return None
+        try:
+            return tuple(int(hex_digits[i : i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return None
+
+    rgb_match = re.search(r"rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)", value)
+    if rgb_match:
+        return tuple(min(int(c), 255) for c in rgb_match.groups())
+
+    return NAMED_LIGHT_COLORS.get(value)
+
+
+def classify_inline_background(style: str):
+    """Classify an inline style's background for dark mode.
+
+    Returns:
+        "wm-bg-neutral" for light grays/whites, "wm-bg-light" for other light
+        colors, or None (no background, dark background, or unparseable).
+    """
+    match = INLINE_BG_PATTERN.search(style)
+    if not match:
+        return None
+
+    value = match.group(1).replace("!important", " ")
+    rgb = parse_css_color(value)  # single token or rgb(...) with spaces
+    for token in value.split():
+        if rgb:
+            break
+        rgb = parse_css_color(token)
+    if not rgb:
+        return None
+
+    highest, lowest = max(rgb), min(rgb)
+    lightness = (highest + lowest) / 2 / 255
+
+    if lightness < 0.7:
+        return None  # dark enough: the template already expects light text
+
+    if highest - lowest <= 24:
+        return "wm-bg-neutral"
+
+    return "wm-bg-light"
+
+
 @app.route("/<project>/<lang>/wiki/<path:title>")
 def wiki_article(
     project: str, lang: str, title: str
@@ -1145,6 +1236,12 @@ def wiki_article(
 
     for style in soup.find_all("style"):
         style.decompose()
+
+    # Tag light inline backgrounds so dark mode can restyle them
+    for element in soup.find_all(style=True):
+        bg_class = classify_inline_background(element["style"])
+        if bg_class:
+            element["class"] = element.get("class", []) + [bg_class]
 
     # Proxy images and videos (src, srcset and poster)
     for img in soup.find_all("img"):

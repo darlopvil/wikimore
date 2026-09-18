@@ -89,6 +89,27 @@ body.dark-mode {
     background-color: #333;
 }
 
+/* Inline template backgrounds, classified server-side in app.py
+   (classify_inline_background). Light grays are designed for a light
+   theme: turn them into the dark surface. Light colored backgrounds keep
+   their meaning (party colors, taxoboxes...) but need dark text. */
+.dark-mode .wm-bg-neutral {
+    background-color: var(--dark-table-alt-bg) !important;
+    color: var(--dark-text-color) !important;
+}
+
+.dark-mode .wm-bg-light {
+    color: #202122 !important;
+}
+
+.dark-mode .wm-bg-light a {
+    color: #0645ad;
+}
+
+.dark-mode .wm-bg-light a.new {
+    color: #ba0000;
+}
+
 /* Table styling */
 .dark-mode .table {
     background-color: var(--dark-table-bg);
