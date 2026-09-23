@@ -920,9 +920,15 @@ NAMED_LIGHT_COLORS = {
 }
 
 
+# MediaWiki emits Codex custom properties with a literal fallback, e.g.
+# "background-color:var(--background-color-neutral-subtle, #f8f9fa)".
+# We don't define those variables, so the fallback is what actually renders.
+CSS_VAR_PATTERN = re.compile(r"var\(\s*--[\w-]+\s*,\s*([^()]+?)\s*\)", re.IGNORECASE)
+
+
 def parse_css_color(value: str):
     """Parse a CSS color token into an (r, g, b) tuple, or None if unsupported."""
-    value = value.strip().lower()
+    value = CSS_VAR_PATTERN.sub(r"\1", value).strip().lower()
 
     if value.startswith("#"):
         hex_digits = value[1:]
