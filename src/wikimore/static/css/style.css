@@ -715,6 +715,51 @@ ul.gallery.mw-gallery-packed-overlay .gallerytext {
     text-align: center;
 }
 
+/* Block quotations: MediaWiki renders {{cita}} and friends as plain
+   <blockquote>, with no classes to hook onto */
+blockquote {
+    margin: 1em 0 1em 1.6em;
+    padding: 0.2em 0 0.2em 1em;
+    border-left: 4px solid #c8ccd1;
+}
+
+blockquote > :first-child {
+    margin-top: 0;
+}
+
+blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+/* Collapsibles: MediaWiki's mw-collapsible needs JavaScript, so app.py
+   converts them into native <details> elements */
+details.wm-collapsible {
+    margin: 1em 0;
+    border: 1px solid #ddd;
+}
+
+details.wm-collapsible > summary {
+    cursor: pointer;
+    padding: 6px 10px;
+    font-weight: bold;
+    background-color: #f2f2f2;
+}
+
+details.wm-collapsible > summary:hover {
+    background-color: #e8e8e8;
+}
+
+details.wm-collapsible > table,
+details.wm-collapsible > .mw-collapsible-content {
+    margin: 0;
+}
+
+/* The box width now lives on the <details>; the table fills it */
+details.wm-collapsible > table {
+    width: 100%;
+    max-width: 100%;
+}
+
 /* Reference styling */
 .reflist-lower-alpha .references {
     list-style-type: lower-alpha;

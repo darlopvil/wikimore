@@ -110,6 +110,23 @@ body.dark-mode {
     color: #ba0000;
 }
 
+.dark-mode blockquote {
+    border-left-color: var(--dark-border-color);
+}
+
+/* Collapsibles converted to <details> in app.py */
+.dark-mode details.wm-collapsible {
+    border-color: var(--dark-border-color);
+}
+
+.dark-mode details.wm-collapsible > summary {
+    background-color: var(--dark-table-alt-bg);
+}
+
+.dark-mode details.wm-collapsible > summary:hover {
+    background-color: var(--dark-sidebar-bg);
+}
+
 /* Table styling */
 .dark-mode .table {
     background-color: var(--dark-table-bg);
@@ -191,12 +208,12 @@ body.dark-mode {
 /* Transparent images (SVG drawings, diagrams) are unreadable on a dark
    background: give them a white canvas, like Wikipedia's night mode.
    Images marked for inversion are excluded (they get inverted instead) */
-.dark-mode img.mw-file-element:not(.skin-invert):not(.mw-invert) {
+.dark-mode img.mw-file-element[data-file-type="drawing"]:not(.skin-invert):not(.mw-invert) {
     background-color: #fff;
 }
 
 .dark-mode .skin-invert-image img.mw-file-element {
-    background-color: transparent;
+    background-color: transparent !important;
 }
 
 /* Wikipedia marks black-on-transparent content (math formulas, some

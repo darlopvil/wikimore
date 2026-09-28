@@ -529,6 +529,10 @@ def get_proxy_srcset(srcset: str) -> str:
     return ", ".join(candidates)
 
 
+PROXY_CACHE_MAX_BYTES = 256 * 1024
+PROXY_CACHE_TIMEOUT = 86400  # 24 hours
+
+
 @app.route("/proxy")
 def proxy() -> Response:
     """A simple proxy for the Wikimedia media hosts in PROXY_ALLOWED_PREFIXES.
@@ -549,19 +553,35 @@ def proxy() -> Response:
     logger.debug(f"Proxying {url}")
 
     # Forward the browser's Accept header so Wikimedia can negotiate
-    # lighter formats (WebP) just like it would for a direct request
-    headers = {"Accept": request.headers.get("Accept", "image/*,*/*;q=0.8")}
+    # lighter formats (WebP) just like it would for a direct request.
+    # Normalised down to the negotiated format so it can be part of a
+    # cache key without splitting it per browser.
+    accept = request.headers.get("Accept", "")
+    accept_key = "webp" if "image/webp" in accept else "any"
+    headers = {"Accept": accept or "image/*,*/*;q=0.8"}
 
-    try:
-        with urlopen_with_retry(url, headers=headers, max_retries=1, timeout=30) as response:
-            data = response.read()
-            content_type = response.headers.get("Content-Type", "application/octet-stream")
-    except urllib.error.HTTPError as e:
-        logger.warning(f"Upstream HTTP {e.code} while proxying {url}")
-        return Response(status=e.code)
-    except (urllib.error.URLError, TimeoutError) as e:
-        logger.warning(f"Upstream error while proxying {url}: {e}")
-        return Response(status=502)
+    cache_key = f"proxy:{accept_key}:{url}"
+    cached = cache.get(cache_key)
+
+    if cached:
+        data, content_type = cached
+    else:
+        try:
+            with urlopen_with_retry(url, headers=headers, max_retries=1, timeout=30) as response:
+                data = response.read()
+                content_type = response.headers.get("Content-Type", "application/octet-stream")
+        except urllib.error.HTTPError as e:
+            logger.warning(f"Upstream HTTP {e.code} while proxying {url}")
+            return Response(status=e.code)
+        except (urllib.error.URLError, TimeoutError) as e:
+            logger.warning(f"Upstream error while proxying {url}: {e}")
+            return Response(status=502)
+
+        # Small files (rendered formulas, icons, thumbnails) are worth
+        # caching: they are requested in bursts and every miss is a
+        # round trip to Wikimedia. Big ones would just fill up Redis.
+        if len(data) <= PROXY_CACHE_MAX_BYTES:
+            cache.set(cache_key, (data, content_type), timeout=PROXY_CACHE_TIMEOUT)
 
     proxied = Response(data, content_type=content_type)
     proxied.headers["Cache-Control"] = "public, max-age=604800"
@@ -957,16 +977,24 @@ def classify_inline_background(style: str):
         "wm-bg-neutral" for light grays/whites, "wm-bg-light" for other light
         colors, or None (no background, dark background, or unparseable).
     """
-    match = INLINE_BG_PATTERN.search(style)
-    if not match:
-        return None
+    # Templates can emit several background declarations on the same element,
+    # e.g. "background-color: ignore transparent; background-color:
+    # var(--background-color-base, #fff)". The browser applies the last valid
+    # one, so walk them all instead of stopping at the first.
+    rgb = None
+    for match in INLINE_BG_PATTERN.finditer(style):
+        value = match.group(1).replace("!important", " ")
+        candidate = parse_css_color(value)  # single token or rgb(...) with spaces
+        for token in value.split():
+            if candidate:
+                break
+            candidate = parse_css_color(token)
 
-    value = match.group(1).replace("!important", " ")
-    rgb = parse_css_color(value)  # single token or rgb(...) with spaces
-    for token in value.split():
-        if rgb:
-            break
-        rgb = parse_css_color(token)
+        if candidate:
+            rgb = candidate
+        elif "transparent" in value.lower() or "none" in value.lower():
+            rgb = None  # an explicit reset also overrides earlier declarations
+
     if not rgb:
         return None
 
@@ -980,6 +1008,76 @@ def classify_inline_background(style: str):
         return "wm-bg-neutral"
 
     return "wm-bg-light"
+
+
+COLLAPSIBLE_FALLBACK_SUMMARY = "Show/hide"
+
+
+def make_collapsibles_native(soup: BeautifulSoup) -> None:
+    """Turn MediaWiki's JS-driven collapsibles into native <details> elements.
+
+    MediaWiki builds the toggle button client-side, so without its JavaScript
+    a .mw-collapsible element is rendered fully expanded and can't be
+    collapsed. <details>/<summary> gives the same behaviour with no scripts.
+
+    Args:
+        soup (BeautifulSoup): The parsed article, modified in place.
+    """
+    for element in soup.find_all(class_="mw-collapsible"):
+        collapsed = "mw-collapsed" in element.get("class", [])
+
+        details = soup.new_tag("details")
+        details["class"] = ["wm-collapsible"]
+        if not collapsed:
+            details["open"] = ""
+        summary = soup.new_tag("summary")
+
+        if element.name == "table":
+            # The first row holds the title; the rest is the collapsible body
+            body = element.find("tbody") or element
+            rows = body.find_all("tr", recursive=False)
+            if len(rows) < 2:
+                continue
+
+            title_cell = rows[0].find(["th", "td"], recursive=False)
+            if title_cell is None:
+                continue
+
+            for toggle in title_cell.find_all(class_="mw-collapsible-toggle"):
+                toggle.decompose()
+            for child in list(title_cell.contents):
+                summary.append(child.extract())
+            rows[0].decompose()
+
+            # The table carries the box width (e.g. width="75%"); move it to
+            # the <details> so the summary bar and the body line up
+            width = element.get("width")
+            if width:
+                del element["width"]
+                details["style"] = f"width: {width};"
+
+            element.insert_before(details)
+            details.append(summary)
+            details.append(element.extract())
+            continue
+
+        # Non-table collapsibles keep their title visible and only fold the
+        # .mw-collapsible-content block
+        content = element.find(class_="mw-collapsible-content")
+        if content is None:
+            continue
+
+        toggle = element.find(class_="mw-collapsible-toggle")
+        if toggle is not None:
+            for child in list(toggle.contents):
+                summary.append(child.extract())
+            toggle.decompose()
+        if not summary.get_text(strip=True):
+            summary.string = COLLAPSIBLE_FALLBACK_SUMMARY
+
+        content.insert_before(details)
+        details.append(summary)
+        details.append(content.extract())
 
 
 @app.route("/<project>/<lang>/wiki/<path:title>")
@@ -1242,6 +1340,9 @@ def wiki_article(
 
     for style in soup.find_all("style"):
         style.decompose()
+
+    # MediaWiki's collapsibles need JS; make them native <details> instead
+    make_collapsibles_native(soup)
 
     # Tag light inline backgrounds so dark mode can restyle them
     for element in soup.find_all(style=True):
