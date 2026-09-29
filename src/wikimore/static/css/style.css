@@ -289,6 +289,9 @@ h1 {
 
 .hatnote,
 .rellink {
+    /* Shrink to the text instead of stretching across the page */
+    width: fit-content;
+    max-width: 100%;
     margin: 1em 0;
     padding: 10px;
     background-color: #f9f9f9;
@@ -714,6 +717,37 @@ ul.gallery.mw-gallery-packed .gallerytext,
 ul.gallery.mw-gallery-packed-hover .gallerytext,
 ul.gallery.mw-gallery-packed-overlay .gallerytext {
     text-align: center;
+}
+
+/* Sortable tables (static/js/sortable.js; MediaWiki uses
+   jquery-tablesorter, which we do not ship) */
+th.wm-sortable-header {
+    cursor: pointer;
+}
+
+th.wm-sortable-header::after {
+    content: " \2195";
+    opacity: 0.45;
+}
+
+th.wm-sortable-header[aria-sort="ascending"]::after {
+    content: " \2191";
+    opacity: 1;
+}
+
+th.wm-sortable-header[aria-sort="descending"]::after {
+    content: " \2193";
+    opacity: 1;
+}
+
+/* Coordinate map links (added in app.py, replacing Wikipedia's
+   JavaScript-only WikiMiniAtlas gadget) */
+a.wm-geo-map {
+    margin-right: 4px;
+}
+
+a.wm-geo-map img {
+    vertical-align: text-bottom;
 }
 
 /* wikitable is MediaWiki's own table class (the .table rules above are

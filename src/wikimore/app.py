@@ -573,7 +573,9 @@ def proxy() -> Response:
         except urllib.error.HTTPError as e:
             logger.warning(f"Upstream HTTP {e.code} while proxying {url}")
             return Response(status=e.code)
-        except (urllib.error.URLError, TimeoutError) as e:
+        except (urllib.error.URLError, TimeoutError, ValueError, OSError) as e:
+            # ValueError covers malformed URLs (spaces, control characters),
+            # which urlopen rejects before any request is made
             logger.warning(f"Upstream error while proxying {url}: {e}")
             return Response(status=502)
 
@@ -1096,6 +1098,105 @@ def make_collapsibles_native(soup: BeautifulSoup) -> None:
         details.append(content.extract())
 
 
+# GeoHack links carry the coordinates in their "params" argument, either as
+# degrees/minutes/seconds ("37_17_01_N_5_55_20_W") or decimal ("37.28_-5.92"),
+# optionally followed by modifiers (region:ES, type:city...).
+GEOHACK_PARAMS_PATTERN = re.compile(r"[?&]params=([^&#]+)", re.IGNORECASE)
+GEOHACK_NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?$")
+# "O" is Spanish for west, and es.wiki uses it in some coordinates
+GEOHACK_HEMISPHERES = {"N": 1, "S": -1, "E": 1, "W": -1, "O": -1}
+
+
+def parse_geohack_coordinates(href: str):
+    """Extract (latitude, longitude) in decimal degrees from a GeoHack URL.
+
+    Args:
+        href (str): The GeoHack link target.
+
+    Returns:
+        tuple[float, float] | None: The coordinates, or None if unparseable.
+    """
+    match = GEOHACK_PARAMS_PATTERN.search(href)
+    if not match:
+        return None
+
+    latitude = longitude = None
+    numbers = []
+
+    for token in match.group(1).split("_"):
+        if not token:
+            continue
+
+        if GEOHACK_NUMBER_PATTERN.match(token):
+            numbers.append(float(token))
+            continue
+
+        sign = GEOHACK_HEMISPHERES.get(token.upper())
+        if sign is None:
+            break  # a modifier such as region:ES; nothing useful after it
+
+        if not numbers:
+            return None
+
+        # degrees, then optional minutes and seconds
+        value = sum(part / 60**i for i, part in enumerate(numbers[:3]))
+        value *= sign
+        numbers = []
+
+        if token.upper() in ("N", "S"):
+            latitude = value
+        else:
+            longitude = value
+
+    if latitude is None and longitude is None and len(numbers) >= 2:
+        latitude, longitude = numbers[0], numbers[1]  # decimal form
+
+    if latitude is None or longitude is None:
+        return None
+    if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+        return None
+
+    return latitude, longitude
+
+
+def add_coordinate_map_links(soup: BeautifulSoup) -> None:
+    """Put a map icon in front of every coordinate link.
+
+    Wikipedia shows one through the WikiMiniAtlas gadget, which is
+    JavaScript and therefore absent here. This adds a plain link to
+    OpenStreetMap instead, leaving the original GeoHack link untouched.
+
+    Args:
+        soup (BeautifulSoup): The parsed article, modified in place.
+    """
+    icon_url = url_for("static", filename="img/globe.svg")
+
+    for link in soup.find_all("a", href=True):
+        if "geohack" not in link["href"].lower():
+            continue
+
+        coordinates = parse_geohack_coordinates(link["href"])
+        if not coordinates:
+            continue
+
+        latitude, longitude = coordinates
+        map_link = soup.new_tag(
+            "a",
+            href=(
+                f"https://www.openstreetmap.org/?mlat={latitude:.5f}"
+                f"&mlon={longitude:.5f}#map=13/{latitude:.5f}/{longitude:.5f}"
+            ),
+            target="_blank",
+            rel="noopener noreferrer",
+            title="Show this location on OpenStreetMap",
+        )
+        map_link["class"] = ["wm-geo-map"]
+
+        icon = soup.new_tag("img", src=icon_url, alt="", width="16", height="16")
+        map_link.append(icon)
+        link.insert_before(map_link)
+
+
 @app.route("/<project>/<lang>/wiki/<path:title>")
 def wiki_article(
     project: str, lang: str, title: str
@@ -1197,7 +1298,8 @@ def wiki_article(
                                 "title": badge,
                                 "url": f"https://www.wikidata.org/wiki/{badge_id}",
                                 "image": get_proxy_url(
-                                    f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{badge_image}"
+                                    "https://commons.wikimedia.org/wiki/"
+                                    f"Special:Redirect/file/{quote(badge_image)}"
                                 ),
                             }
                         )
@@ -1359,6 +1461,9 @@ def wiki_article(
 
     # MediaWiki's collapsibles need JS; make them native <details> instead
     make_collapsibles_native(soup)
+
+    # WikiMiniAtlas is a JS gadget; add our own map link instead
+    add_coordinate_map_links(soup)
 
     # Tag light inline backgrounds so dark mode can restyle them
     for element in soup.find_all(style=True):
