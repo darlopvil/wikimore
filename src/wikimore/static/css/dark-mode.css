@@ -114,6 +114,22 @@ body.dark-mode {
     border-left-color: var(--dark-border-color);
 }
 
+/* wikitable: the light background/borders of style.css would fight the
+   dark theme. Inline cell colours from templates still win over these. */
+.dark-mode table.wikitable {
+    background-color: var(--dark-infobox-bg);
+    border-color: var(--dark-border-color);
+}
+
+.dark-mode table.wikitable > * > tr > th,
+.dark-mode table.wikitable > * > tr > td {
+    border-color: var(--dark-border-color);
+}
+
+.dark-mode table.wikitable > * > tr > th {
+    background-color: var(--dark-table-alt-bg);
+}
+
 /* Collapsibles converted to <details> in app.py */
 .dark-mode details.wm-collapsible {
     border-color: var(--dark-border-color);
@@ -174,6 +190,7 @@ body.dark-mode {
 }
 
 /* Hatnote and ambox */
+.dark-mode .rellink,
 .dark-mode .hatnote,
 .dark-mode .ambox {
     background-color: var(--dark-sidebar-bg);

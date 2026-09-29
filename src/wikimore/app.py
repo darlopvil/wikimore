@@ -1023,8 +1023,12 @@ def make_collapsibles_native(soup: BeautifulSoup) -> None:
     Args:
         soup (BeautifulSoup): The parsed article, modified in place.
     """
-    for element in soup.find_all(class_="mw-collapsible"):
-        collapsed = "mw-collapsed" in element.get("class", [])
+    # "collapsible"/"collapsed" are the legacy classes, still used by plenty
+    # of templates (es.wiki's climate tables, for one); MediaWiki's JS is
+    # what adds the mw- prefixed ones, so we must match both
+    for element in soup.find_all(class_=["mw-collapsible", "collapsible"]):
+        classes = element.get("class", [])
+        collapsed = "mw-collapsed" in classes or "collapsed" in classes
 
         details = soup.new_tag("details")
         details["class"] = ["wm-collapsible"]
@@ -1049,11 +1053,23 @@ def make_collapsibles_native(soup: BeautifulSoup) -> None:
                 summary.append(child.extract())
             rows[0].decompose()
 
-            # The table carries the box width (e.g. width="75%"); move it to
-            # the <details> so the summary bar and the body line up
+            # The table carries the box width, either as width="75%" or in
+            # its inline style; move it to the <details> so the summary bar
+            # and the body line up
             width = element.get("width")
             if width:
                 del element["width"]
+            else:
+                style = element.get("style", "")
+                width_match = re.search(r"(?:^|;)\s*width\s*:\s*([^;]+)", style)
+                if width_match:
+                    width = width_match.group(1).strip()
+                    # Drop it from the table, or its inline width would beat
+                    # the stylesheet rule that makes it fill the <details>
+                    element["style"] = (
+                        style[: width_match.start()] + style[width_match.end() :]
+                    ).lstrip("; ")
+            if width:
                 details["style"] = f"width: {width};"
 
             element.insert_before(details)

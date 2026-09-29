@@ -287,7 +287,8 @@ h1 {
     clear: both;
 }
 
-.hatnote {
+.hatnote,
+.rellink {
     margin: 1em 0;
     padding: 10px;
     background-color: #f9f9f9;
@@ -715,6 +716,33 @@ ul.gallery.mw-gallery-packed-overlay .gallerytext {
     text-align: center;
 }
 
+/* wikitable is MediaWiki's own table class (the .table rules above are
+   not it). Without these, wikitables render as bare text with no borders */
+table.wikitable {
+    margin: 1em 0;
+    border: 1px solid #a2a9b1;
+    border-collapse: collapse;
+    background-color: #f8f9fa;
+    max-width: 100%;
+}
+
+table.wikitable > * > tr > th,
+table.wikitable > * > tr > td {
+    border: 1px solid #a2a9b1;
+    padding: 0.3em 0.6em;
+}
+
+table.wikitable > * > tr > th {
+    background-color: #eaecf0;
+    font-weight: bold;
+    text-align: center;
+}
+
+table.wikitable > caption {
+    padding: 0.4em;
+    font-weight: bold;
+}
+
 /* Block quotations: MediaWiki renders {{cita}} and friends as plain
    <blockquote>, with no classes to hook onto */
 blockquote {
@@ -736,6 +764,11 @@ blockquote > :last-child {
 details.wm-collapsible {
     margin: 1em 0;
     border: 1px solid #ddd;
+    /* Own block formatting context: without it the box slides underneath
+       floated images (infobox thumbnails) instead of sitting beside them */
+    display: flow-root;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 details.wm-collapsible > summary {
