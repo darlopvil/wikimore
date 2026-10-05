@@ -5,6 +5,7 @@ from flask import (
     redirect,
     url_for,
     Response,
+    stream_with_context,
 )
 
 import urllib.request
@@ -530,6 +531,7 @@ def get_proxy_srcset(srcset: str) -> str:
 
 
 PROXY_CACHE_MAX_BYTES = 256 * 1024
+PROXY_CHUNK_SIZE = 64 * 1024
 PROXY_CACHE_TIMEOUT = 86400  # 24 hours
 
 
@@ -560,16 +562,22 @@ def proxy() -> Response:
     accept_key = "webp" if "image/webp" in accept else "any"
     headers = {"Accept": accept or "image/*,*/*;q=0.8"}
 
+    # Range requests are what make <video> playable: without them the
+    # browser has to download the whole file before it can start, and
+    # cannot seek. They are passed straight through and never cached.
+    range_header = request.headers.get("Range")
+    if range_header:
+        headers["Range"] = range_header
+
     cache_key = f"proxy:{accept_key}:{url}"
-    cached = cache.get(cache_key)
+    cached = None if range_header else cache.get(cache_key)
 
     if cached:
         data, content_type = cached
+        proxied = Response(data, content_type=content_type)
     else:
         try:
-            with urlopen_with_retry(url, headers=headers, max_retries=1, timeout=30) as response:
-                data = response.read()
-                content_type = response.headers.get("Content-Type", "application/octet-stream")
+            upstream = urlopen_with_retry(url, headers=headers, max_retries=1, timeout=30)
         except urllib.error.HTTPError as e:
             logger.warning(f"Upstream HTTP {e.code} while proxying {url}")
             return Response(status=e.code)
@@ -579,13 +587,58 @@ def proxy() -> Response:
             logger.warning(f"Upstream error while proxying {url}: {e}")
             return Response(status=502)
 
-        # Small files (rendered formulas, icons, thumbnails) are worth
-        # caching: they are requested in bursts and every miss is a
-        # round trip to Wikimedia. Big ones would just fill up Redis.
-        if len(data) <= PROXY_CACHE_MAX_BYTES:
-            cache.set(cache_key, (data, content_type), timeout=PROXY_CACHE_TIMEOUT)
+        content_type = upstream.headers.get("Content-Type", "application/octet-stream")
+        status = getattr(upstream, "status", 200) or 200
 
-    proxied = Response(data, content_type=content_type)
+        def stream():
+            """Relay the body in chunks, caching it if it turns out to be small.
+
+            Buffering whole responses would stall a worker for the entire
+            download (and blow up on a 100 MB video), so nothing is held in
+            memory beyond the cache cap.
+            """
+            buffered = []
+            buffered_size = 0
+            cacheable = not range_header and status == 200
+
+            try:
+                while True:
+                    chunk = upstream.read(PROXY_CHUNK_SIZE)
+                    if not chunk:
+                        break
+
+                    if cacheable:
+                        buffered_size += len(chunk)
+                        if buffered_size <= PROXY_CACHE_MAX_BYTES:
+                            buffered.append(chunk)
+                        else:
+                            cacheable = False
+                            buffered = []
+
+                    yield chunk
+            finally:
+                upstream.close()
+
+            # Small files (rendered formulas, icons, thumbnails) are worth
+            # caching: they are requested in bursts and every miss is a
+            # round trip to Wikimedia. Big ones would just fill up Redis.
+            if cacheable and buffered:
+                cache.set(
+                    cache_key,
+                    (b"".join(buffered), content_type),
+                    timeout=PROXY_CACHE_TIMEOUT,
+                )
+
+        proxied = Response(
+            stream_with_context(stream()), status=status, content_type=content_type
+        )
+
+        for header in ("Content-Length", "Content-Range", "Accept-Ranges"):
+            value = upstream.headers.get(header)
+            if value:
+                proxied.headers[header] = value
+
+    proxied.headers.setdefault("Accept-Ranges", "bytes")
     proxied.headers["Cache-Control"] = "public, max-age=604800"
     proxied.headers["X-Content-Type-Options"] = "nosniff"
     # Proxied SVGs are served from our origin: never let them run scripts
@@ -1197,6 +1250,36 @@ def add_coordinate_map_links(soup: BeautifulSoup) -> None:
         link.insert_before(map_link)
 
 
+# Browsers play the first <source> they support, and Parsoid puts the
+# original file first: for a video that can be a 100+ MB 1080p webm.
+# MediaWiki's own player picks a transcode instead, so we reorder them.
+PREFERRED_VIDEO_HEIGHT = 480
+
+
+def prefer_light_video_sources(soup: BeautifulSoup) -> None:
+    """Reorder <video> sources so a transcode comes before the original.
+
+    Args:
+        soup (BeautifulSoup): The parsed article, modified in place.
+    """
+    for video in soup.find_all("video"):
+        sources = video.find_all("source", recursive=False)
+        if len(sources) < 2:
+            continue
+
+        def rank(source):
+            try:
+                height = int(source.get("data-height") or source.get("data-file-height"))
+            except (TypeError, ValueError):
+                height = 0
+            # transcodes first, then whichever is closest to 480p
+            is_original = source.get("data-transcodekey") is None
+            return (is_original, abs(height - PREFERRED_VIDEO_HEIGHT) if height else 10**6)
+
+        for source in sorted(sources, key=rank):
+            video.append(source.extract())
+
+
 @app.route("/<project>/<lang>/wiki/<path:title>")
 def wiki_article(
     project: str, lang: str, title: str
@@ -1464,6 +1547,9 @@ def wiki_article(
 
     # WikiMiniAtlas is a JS gadget; add our own map link instead
     add_coordinate_map_links(soup)
+
+    # Without MediaWiki's player, the browser would pick the original file
+    prefer_light_video_sources(soup)
 
     # Tag light inline backgrounds so dark mode can restyle them
     for element in soup.find_all(style=True):
