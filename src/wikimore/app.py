@@ -804,12 +804,14 @@ def fetch_file_page_fallback(base_url, title):
                     credit = extmetadata.get("Credit", {}).get("value", "")
 
                     html_parts = ['<div class="mw-parser-output">']
-                    html_parts.append(f'<h2 class="title">{escape(title)}</h2>')
 
                     html_parts.append('<div class="fullImageLink">')
                     if thumb_url:
+                        # The full-size file opens in a new tab, through the
+                        # proxy like everything else
                         html_parts.append(
-                            f'<a href="{escape(img_url)}" target="_blank">'
+                            f'<a href="{escape(get_proxy_url(img_url))}" '
+                            f'target="_blank" rel="noopener noreferrer">'
                             f'<img src="{get_proxy_url(thumb_url)}" '
                             f'alt="{escape(title)}" style="max-width:100%;"/>'
                             f"</a>"
@@ -841,28 +843,28 @@ def fetch_file_page_fallback(base_url, title):
             logger.warning(f"Failed to fetch file info from {api_url}: {e}")
             continue  # Try next URL
 
-    # EMERGENCY FALLBACK: if all APIs are blocked, use Special:FilePath
-    # (redirects straight to the file). Note: this path does NOT go through the
-    # local proxy (commons.wikimedia.org is not in the allowlist), so the
-    # browser loads the image directly from Commons. This only happens when even
-    # imageinfo is unreachable — acceptable degradation.
+    # EMERGENCY FALLBACK: if all APIs are blocked, use Special:Redirect/file
+    # (redirects straight to the file). It is in PROXY_ALLOWED_PREFIXES, so
+    # the image still goes through the local proxy.
     filename = filename.replace(" ", "_")  # namespace prefix already stripped
     encoded_filename = quote(filename)
-    direct_image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded_filename}"
+    direct_image_url = get_proxy_url(
+        f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{encoded_filename}"
+    )
     commons_page_url = f"https://commons.wikimedia.org/wiki/File:{encoded_filename}"
 
     logger.info(f"Using emergency fallback for {title} — APIs are blocked")
 
     return (
         f'<div class="mw-parser-output">'
-        f'<h2 class="title">{escape(title)}</h2>'
         f'<div class="fullImageLink">'
         f'<img src="{escape(direct_image_url)}" '
         f'alt="{escape(title)}" style="max-width:100%;"/>'
         f"</div>"
         f'<table class="fileinfo">'
         f'<tr><th>View on</th><td><a href="{escape(commons_page_url)}">Wikimedia Commons</a></td></tr>'
-        f'<tr><th>Direct link</th><td><a href="{escape(direct_image_url)}">Full resolution image</a></td></tr>'
+        f'<tr><th>Direct link</th><td><a href="{escape(direct_image_url)}" '
+        f'target="_blank" rel="noopener noreferrer">Full resolution image</a></td></tr>'
         f"</table>"
         f"</div>"
     )
