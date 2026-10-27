@@ -14,7 +14,7 @@ This is a fork of [Wikimore by the Private.coffee Team](https://git.private.coff
 
 ### Fixes in this fork
 
-- **`File:` pages** render the actual file with its description instead of an empty page, plus better resilience to the API's rate limiting (HTTP 429). Fixes upstream issue #4.
+- **`File:` pages** render the actual file with its description instead of an empty page, plus better resilience to the API's rate limiting (HTTP 429). Clicking the image opens the full-size file in a new tab through the proxy, never straight from Wikimedia. Fixes upstream issue #4.
 - **Complete image proxying.** Wikimedia moved article thumbnails to `thumb.wikimedia.org` and serves rendered formulas from `wikimedia.org/api/rest_v1/media/math`; neither host was proxied, so browsers requested most images straight from Wikimedia, exposing the reader's IP. The `srcset` attribute was never rewritten either, so high-DPI screens bypassed the proxy entirely. All of it now goes through `/proxy`, which also forwards the upstream `Content-Type` (SVG formulas are not rendered without it), caches small responses in Redis and sets `Cache-Control`.
 - **Galleries** of every mode render properly. Only `mw-gallery-packed` was styled, so the default `mw-gallery-traditional` galleries came out as a bulleted vertical list.
 - **`wikitable` styling.** The stylesheet had no rule at all for MediaWiki's own table class, so most tables rendered as borderless text.
