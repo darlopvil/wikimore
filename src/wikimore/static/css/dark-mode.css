@@ -130,6 +130,15 @@ body.dark-mode {
     background-color: var(--dark-table-alt-bg);
 }
 
+.dark-mode #wm-categories {
+    background-color: var(--dark-infobox-bg);
+    border-color: var(--dark-border-color);
+}
+
+.dark-mode .wm-category {
+    border-left-color: var(--dark-border-color);
+}
+
 /* Collapsibles converted to <details> in app.py */
 .dark-mode details.wm-collapsible {
     border-color: var(--dark-border-color);

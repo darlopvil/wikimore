@@ -227,17 +227,32 @@ h1 {
     text-align: center;
 }
 
+/* Category box at the end of the article, laid out like MediaWiki's:
+   "Categories: A | B | C" inside a light frame */
+#wm-categories {
+    clear: both;
+    margin-top: 1.5em;
+    padding: 0.4em 0.6em;
+    border: 1px solid #a2a9b1;
+    background-color: #f8f9fa;
+    font-size: 0.9em;
+    line-height: 1.9;
+}
+
+.wm-categories-label {
+    margin-right: 0.2em;
+}
+
 .wm-category {
-    display: inline;
-    font-size: 0.8em;
+    display: inline-block;
+    padding: 0 0.5em;
+    border-left: 1px solid #a2a9b1;
+    line-height: 1.25;
 }
 
-.wm-category::before {
-    content: "[";
-}
-
-.wm-category::after {
-    content: "]";
+.wm-category:first-of-type {
+    border-left: none;
+    padding-left: 0.2em;
 }
 
 .category-link {
@@ -820,6 +835,42 @@ th.wm-sortable-header[aria-sort="ascending"]::after {
 th.wm-sortable-header[aria-sort="descending"]::after {
     content: " \2193";
     opacity: 1;
+}
+
+/* Wiktionary quotations, folded into <details> by app.py (Wiktionary
+   itself hides them behind a JavaScript toggle) */
+/* Inline, right after the definition, like Wiktionary's "[quotations ▼]".
+   Once open, the list (a block) drops below the definition. */
+details.wm-quotations {
+    display: inline;
+}
+
+details.wm-quotations > summary {
+    display: inline;
+    margin-left: 0.6em;
+    cursor: pointer;
+    font-size: 0.8em;
+    list-style: none;
+}
+
+details.wm-quotations > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.wm-quotations > summary::before {
+    content: "[";
+}
+
+details.wm-quotations > summary::after {
+    content: " \25BC]";
+}
+
+details.wm-quotations[open] > summary::after {
+    content: " \25B2]";
+}
+
+details.wm-quotations > ul {
+    margin-top: 0.3em;
 }
 
 /* Coordinate map links (added in app.py, replacing Wikipedia's

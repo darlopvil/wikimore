@@ -42,8 +42,9 @@
     {% endif %}
     {% if categories %}
         <div id="wm-categories">
+            <span class="wm-categories-label">Categories:</span>
             {% for category in categories %}
-                <a href="{{ category.url }}" class="wm-category">{{ category.title }}</a>
+                <a href="{{ category.url }}" class="wm-category">{{ category.name }}</a>
             {% endfor %}
         </div>
     {% endif %}

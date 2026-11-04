@@ -905,7 +905,7 @@ def fetch_article_info(base_url, title):
     """Fetches article metadata from the Wikimedia API with caching."""
     logger.debug(f"Fetching article info for {title} from {base_url}")
 
-    article_info_url = f"{base_url}/w/api.php?action=query&format=json&titles={escape(quote(title.replace(' ', '_')), True)}&prop=info|pageprops|categoryinfo|langlinks|categories&lllimit=500&cllimit=500"
+    article_info_url = f"{base_url}/w/api.php?action=query&format=json&titles={escape(quote(title.replace(' ', '_')), True)}&prop=info|pageprops|categoryinfo|langlinks|categories&lllimit=500&cllimit=500&clshow=!hidden"
 
     with urlopen_with_retry(article_info_url, max_retries=3) as response:
         logger.debug(f"Tried to fetch info for {title} from {article_info_url}")
@@ -1293,6 +1293,42 @@ def prefer_light_video_sources(soup: BeautifulSoup) -> None:
             video.append(source.extract())
 
 
+# Classes Wiktionary's quotation templates (quote-book, RQ:...) put on
+# each quotation. Plain "* year, source:" lines carry none, but they share
+# the list with templated ones, so one match is enough for the whole list.
+WIKTIONARY_QUOTATION_CLASSES = ["citation-whole", "h-quotation", "cited-source"]
+
+
+def fold_wiktionary_quotations(soup: BeautifulSoup) -> None:
+    """Fold each sense's list of quotations into a native <details>.
+
+    Wiktionary hides them behind a "quotations" toggle added by one of its
+    JavaScript gadgets, so here every quotation was always on display and
+    pushed the definitions apart. Usage examples are left alone: Wiktionary
+    shows those too.
+
+    Args:
+        soup (BeautifulSoup): The parsed article, modified in place.
+    """
+    for quotations in soup.find_all("ul"):
+        sense = quotations.parent
+        if sense is None or sense.name != "li":
+            continue
+        if sense.parent is None or sense.parent.name != "ol":
+            continue
+        if not quotations.find(class_=WIKTIONARY_QUOTATION_CLASSES):
+            continue
+
+        details = soup.new_tag("details")
+        details["class"] = ["wm-quotations"]
+        summary = soup.new_tag("summary")
+        summary.string = "quotations"
+
+        quotations.insert_before(details)
+        details.append(summary)
+        details.append(quotations.extract())
+
+
 @app.route("/<project>/<lang>/wiki/<path:title>")
 def wiki_article(
     project: str, lang: str, title: str
@@ -1418,6 +1454,9 @@ def wiki_article(
                         lang=lang,
                         title=category["title"],
                     )
+                    # "Category:Foo" / "Categoría:Foo" -> "Foo"; only the
+                    # first colon is the namespace ("Category:en:Housing")
+                    category["name"] = category["title"].split(":", 1)[-1]
 
         except Exception as e:
             # Metadata (interwiki, badges, categories) is optional. If this
@@ -1557,6 +1596,10 @@ def wiki_article(
 
     # MediaWiki's collapsibles need JS; make them native <details> instead
     make_collapsibles_native(soup)
+
+    # Wiktionary folds quotations with a JS gadget; do it with <details>
+    if project == "wiktionary":
+        fold_wiktionary_quotations(soup)
 
     # WikiMiniAtlas is a JS gadget; add our own map link instead
     add_coordinate_map_links(soup)
