@@ -832,6 +832,22 @@ a.wm-geo-map img {
     vertical-align: text-bottom;
 }
 
+/* Placeholders Parsoid leaves where a template produced nothing (an empty
+   first sense in Wiktionary definition lists, for instance). MediaWiki's
+   core CSS hides them; without this they render as blank list items. */
+.mw-empty-elt {
+    display: none;
+}
+
+/* Location maps: labels are positioned over the map image, which is always
+   a light drawing, so they need dark text whatever the theme. Wikipedia
+   gets this wrong in dark mode and leaves them light grey on the map. */
+div[style*="position:relative"] > div[style*="position:absolute"],
+div[style*="position: relative"] > div[style*="position: absolute"] {
+    color: #202122;
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+}
+
 /* wikitable is MediaWiki's own table class (the .table rules above are
    not it). Without these, wikitables render as bare text with no borders */
 table.wikitable {
