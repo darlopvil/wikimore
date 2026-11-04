@@ -659,6 +659,88 @@ figcaption,
     height: auto;
 }
 
+/* Multiple image template (Plantilla:Imagen múltiple, Template:Multiple
+   image). Its layout comes from TemplateStyles, which we strip along with
+   every other <style>, so its rules are reproduced here. The generic
+   figure/.thumb rules above must not apply inside it: the template sets
+   fixed pixel sizes and any extra padding or border breaks the rows. */
+div.thumb.tmulti {
+    padding: 0;
+    background: none;
+    border: none;
+    overflow: visible;
+}
+
+.tmulti .thumbinner {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+}
+
+.tmulti .trow {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    clear: left;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tmulti .tsingle {
+    margin: 1px;
+    float: left;
+}
+
+div.tmulti .tsingle .mw-file-element {
+    padding: 0;
+    border: none;
+    margin: 0;
+}
+
+.tmulti .theader {
+    clear: both;
+    font-weight: bold;
+    text-align: center;
+    align-self: center;
+    width: 100%;
+}
+
+.tmulti .thumbcaption {
+    background-color: transparent;
+}
+
+.tmulti .text-align-left {
+    text-align: left;
+}
+
+.tmulti .text-align-right {
+    text-align: right;
+}
+
+.tmulti .text-align-center {
+    text-align: center;
+}
+
+@media all and (max-width: 720px) {
+    .tmulti .thumbinner {
+        width: 100% !important;
+        box-sizing: border-box;
+        max-width: none !important;
+        align-items: center;
+    }
+
+    .tmulti .trow {
+        justify-content: center;
+    }
+
+    .tmulti .tsingle {
+        float: none !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        text-align: center;
+    }
+}
+
 /* Galleries: all modes (traditional, nolines, packed, packed-hover...) */
 ul.gallery {
     display: flex;
