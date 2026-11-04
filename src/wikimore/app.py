@@ -687,6 +687,9 @@ def search() -> Union[Text, Response]:
     return render_template("search.html")
 
 
+MOBILE_DOMAIN_PATTERN = re.compile(r"^([a-z0-9-]+)\.m\.")
+
+
 @app.route("/<domain>/<path:url>")
 def inbound_redirect(domain: str, url: str) -> Union[Text, Response, Tuple[Text, int]]:
     """Redirects to the appropriate project/language combination given the domain name of a Wikimedia project
@@ -700,14 +703,22 @@ def inbound_redirect(domain: str, url: str) -> Union[Text, Response, Tuple[Text,
     """
     # TODO: Make this the default route scheme instead of a redirect
 
+    # Mobile domains (en.m.wikipedia.org, commons.m.wikimedia.org) are the
+    # same wiki as their desktop counterpart. LibRedirect and links shared
+    # from phones send them here as they are.
+    domain = MOBILE_DOMAIN_PATTERN.sub(r"\1.", domain.lower())
+
+    # Keep the query string (?title=..., ?oldid=...), or index.php links
+    # lose the page they point to
+    query = request.query_string.decode()
+    suffix = f"?{query}" if query else ""
+
     for language, language_projects in app.languages.items():
         for project_name, project_url in language_projects["projects"].items():
             if project_url == f"https://{domain}":
-                return redirect(f"{url_for('home')}{project_name}/{language}/{url}")
-
-    for project_name, project_url in app.languages["special"]["projects"].items():
-        if project_url == f"https://{domain}":
-            return redirect(f"{url_for('home')}/{project_name}/{language}/{url}")
+                return redirect(
+                    f"{url_for('home')}{project_name}/{language}/{url}{suffix}"
+                )
 
     # TODO / IDEA: Handle non-Wikimedia Mediawiki projects here?
 
@@ -1697,7 +1708,11 @@ def index_php_redirect(project, lang) -> Response:
     Returns:
         Response: A redirect to the main page of the Wikimedia project.
     """
-    # TODO: Handle query string
+    # index.php?title=X is just another way to link to an article: send it
+    # there directly (no need to ask Wikimedia for the main page)
+    title = request.args.get("title")
+    if title:
+        return redirect(url_for("wiki_article", project=project, lang=lang, title=title))
 
     try:
         url = f"{app.languages[lang]['projects'][project]}/w/api.php?action=query&format=json&meta=siteinfo&siprop=general"
