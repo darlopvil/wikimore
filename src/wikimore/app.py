@@ -9,7 +9,7 @@ from flask import (
 )
 
 import urllib.request
-from urllib.parse import urlencode, urlparse, quote
+from urllib.parse import urlencode, urlparse, quote, unquote
 from html import escape
 import json
 import re
@@ -1117,6 +1117,10 @@ def make_collapsibles_native(soup: BeautifulSoup) -> None:
 
             for toggle in title_cell.find_all(class_="mw-collapsible-toggle"):
                 toggle.decompose()
+            # Keep the title cell's classes (navbox-title, for one) so the
+            # stylesheet can still style the title bar
+            if title_cell.get("class"):
+                summary["class"] = title_cell["class"]
             for child in list(title_cell.contents):
                 summary.append(child.extract())
             rows[0].decompose()
@@ -1636,16 +1640,29 @@ def wiki_article(
         if video.get("poster"):
             video["poster"] = get_proxy_url(video["poster"])
 
-    # Convert category elements to links
+    # Convert category elements to links. They come in the page's own order,
+    # the one Wikipedia shows, while the API sorts them alphabetically: note
+    # it so the category box can follow it
+    category_order = {}
     for link in soup.find_all("link", rel="mw:PageProp/Category"):
+        category_title = unquote(link["href"][2:].split("#", 1)[0]).replace("_", " ")
+        category_order.setdefault(category_title, len(category_order))
         link.name = "a"
         link.string = link["href"][2:].replace("_", " ")
         link["class"] = "category-link"
+
+    # Stable sort: anything the HTML doesn't list keeps its API order, last
+    categories.sort(key=lambda c: category_order.get(c["title"], len(category_order)))
 
     # Remove meta links
     for li in soup.find_all("li"):
         if any(cls in li.get("class", []) for cls in ["nv-view", "nv-talk", "nv-edit"]):
             li.decompose()
+
+    # Without its v·t·e links the navbar is an empty box; drop it
+    for navbar in soup.find_all("div", class_="navbar"):
+        if not navbar.find("li"):
+            navbar.decompose()
 
     # Add classes to reference links
     for span in soup.find_all(class_="mw-reflink-text"):

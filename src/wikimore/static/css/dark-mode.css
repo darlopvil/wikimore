@@ -187,15 +187,45 @@ body.dark-mode {
 }
 
 /* Navbox styling */
-.dark-mode .navbox {
+.dark-mode .navbox,
+.dark-mode .navbox-subgroup {
     background-color: var(--dark-navbox-bg);
+    border-color: var(--dark-border-color);
+}
+
+/* The row gaps are borders in the navbox background colour */
+.dark-mode .navbox-list,
+.dark-mode tr + tr > .navbox-abovebelow,
+.dark-mode tr + tr > .navbox-group,
+.dark-mode tr + tr > .navbox-image,
+.dark-mode tr + tr > .navbox-list {
+    border-color: var(--dark-navbox-bg);
 }
 
 .dark-mode .navbox-title,
-.dark-mode .navbox-group,
-.dark-mode .navbox-abovebelow {
+.dark-mode .navbox details.wm-collapsible > summary.navbox-title {
     background-color: var(--dark-navbox-header-bg);
     color: white;
+}
+
+.dark-mode .navbox details.wm-collapsible > summary.navbox-title:hover {
+    background-color: #3f51b5;
+}
+
+.dark-mode .navbox-group,
+.dark-mode .navbox-abovebelow,
+.dark-mode .navbox-subgroup .navbox-title {
+    background-color: #283593;
+    color: white;
+}
+
+.dark-mode .navbox-subgroup .navbox-group,
+.dark-mode .navbox-subgroup .navbox-abovebelow {
+    background-color: #1f2a6e;
+}
+
+.dark-mode .navbox-even {
+    background-color: #303030;
 }
 
 /* Hatnote and ambox */
@@ -253,11 +283,6 @@ body.dark-mode {
 /* Side box styling */
 .dark-mode .side-box {
     background-color: var(--dark-sidebar-bg);
-    border: 1px solid var(--dark-border-color);
-}
-
-/* Authority control styling */
-.dark-mode .authority-control {
     border: 1px solid var(--dark-border-color);
 }
 

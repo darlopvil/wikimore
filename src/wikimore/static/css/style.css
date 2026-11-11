@@ -445,68 +445,261 @@ h1 {
     background-color: green;
 }
 
-
-/* Navbox styling */
+/* Navbox, Hlist, Plainlist and Infobox company: these come from Wikipedia's
+   TemplateStyles (Module:Navbox/styles.css, Hlist/styles.css,
+   Plainlist/styles.css, Template:Infobox company/styles.css), which we strip
+   along with every other <style> in the article, so they are reproduced here */
 .navbox {
-    padding: 3px;
-    background-color: #f9f9f9;
-    margin-bottom: 1em;
-    font-size: small;
-}
-
-.navbox-title,
-.navbox-group,
-.navbox-abovebelow {
-    background-color: #bbddff;
-    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid #a2a9b1;
+    width: 100%;
+    clear: both;
+    font-size: 88%;
     text-align: center;
+    padding: 1px;
+    margin: 1em auto 0;
+    background-color: #fdfdfd;
 }
 
-.navbox-title {
-    font-size: 114%;
-    margin: 0 4em;
+.navbox .navbox {
+    margin-top: 0;
+}
+
+/* Stacked navboxes (and the authority control box under them) share a border */
+.navbox + .navbox-styles + .navbox,
+.navbox + .navbox {
+    margin-top: -1px;
+}
+
+.navbox-inner,
+.navbox-subgroup {
+    width: 100%;
+}
+
+.navbox-subgroup {
+    background-color: #fdfdfd;
+}
+
+.navbox-group,
+.navbox-title,
+.navbox-abovebelow {
+    padding: 0.25em 1em;
+    line-height: 1.5em;
+    text-align: center;
 }
 
 .navbox-group {
-    text-align: left;
-    border-bottom: 1px solid #ddd;
+    white-space: nowrap;
+    text-align: right;
 }
 
-.navbox-inner {
-    border-spacing: 0;
-    background: transparent;
-    color: inherit;
+.navbox-title {
+    background-color: #ccf;
+}
+
+.navbox-abovebelow,
+.navbox-group,
+.navbox-subgroup .navbox-title {
+    background-color: #ddf;
+}
+
+.navbox-subgroup .navbox-group,
+.navbox-subgroup .navbox-abovebelow {
+    background-color: #e6e6ff;
+}
+
+.navbox-list {
+    line-height: 1.5em;
+    border-color: #fdfdfd;
 }
 
 .navbox-list-with-group {
-    padding: 0;
-    margin: 0;
-    border-bottom: 1px solid #ddd;
-    display: flex;
-}
-
-.navbar {
-    text-align: center;
-    padding: 5px;
-}
-
-.hlist ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.hlist ul li {
-    display: inline;
-    margin-right: 10px;
-}
-
-/* Authority control styling */
-.authority-control {
-    padding: 3px;
     text-align: left;
-    margin-bottom: 1em;
-    border: 1px solid #ddd;
+    border-left-width: 2px;
+    border-left-style: solid;
+}
+
+/* The 2px gaps between rows are borders in the navbox background colour */
+tr + tr > .navbox-abovebelow,
+tr + tr > .navbox-group,
+tr + tr > .navbox-image,
+tr + tr > .navbox-list {
+    border-top: 2px solid #fdfdfd;
+}
+
+.navbox-even {
+    background-color: #f7f7f7;
+}
+
+.navbox-odd {
+    background-color: transparent;
+}
+
+.navbox .hlist td ul,
+.navbox .hlist td ol,
+.navbox td.hlist ul,
+.navbox td.hlist ol {
+    padding: 0.125em 0;
+}
+
+/* make_collapsibles_native turns the navbox title row into the <summary>
+   of a <details>; it sits inside the navbox border, so drop the generic box */
+.navbox details.wm-collapsible {
+    margin: 0;
+    border: 0;
+}
+
+.navbox details.wm-collapsible > summary.navbox-title {
+    position: relative;
+    list-style: none;
+    padding: 0.25em 4em;
+    background-color: #ccf;
+}
+
+.navbox details.wm-collapsible > summary.navbox-title::-webkit-details-marker {
+    display: none;
+}
+
+/* Stands in for MediaWiki's [hide]/[show] button, without the JS */
+.navbox details.wm-collapsible > summary.navbox-title::after {
+    content: "[\25B2]";
+    position: absolute;
+    right: 0.5em;
+    top: 0.25em;
+    font-weight: normal;
+}
+
+.navbox details.wm-collapsible:not([open]) > summary.navbox-title::after {
+    content: "[\25BC]";
+}
+
+.navbox details.wm-collapsible > summary.navbox-title:hover {
+    background-color: #c2c2f5;
+}
+
+.hlist ul,
+.hlist ol,
+.hlist dl {
+    margin: 0;
+    padding: 0;
+}
+
+.hlist li,
+.hlist dd,
+.hlist dt {
+    margin: 0;
+    display: inline;
+}
+
+.hlist.inline,
+.hlist.inline ul,
+.hlist.inline ol,
+.hlist.inline dl,
+.hlist ul ul,
+.hlist ul ol,
+.hlist ol ul,
+.hlist ol ol,
+.hlist dl dl,
+.hlist dl ul,
+.hlist dl ol,
+.hlist ul dl,
+.hlist ol dl {
+    display: inline;
+}
+
+.hlist .mw-empty-li {
+    display: none;
+}
+
+.hlist dt::after {
+    content: ": ";
+}
+
+/* The " · " between items */
+.hlist li::after,
+.hlist dd::after {
+    content: "\a0 · ";
+    font-weight: bold;
+}
+
+.hlist li:last-child::after,
+.hlist dd:last-child::after,
+.hlist dt:last-child::after {
+    content: none;
+}
+
+/* Nested lists go in brackets: "Item (sub · sub)" */
+.hlist li li:first-child::before,
+.hlist li dd:first-child::before,
+.hlist li dt:first-child::before,
+.hlist dd li:first-child::before,
+.hlist dd dd:first-child::before,
+.hlist dd dt:first-child::before,
+.hlist dt li:first-child::before,
+.hlist dt dd:first-child::before,
+.hlist dt dt:first-child::before {
+    content: " (";
+    font-weight: normal;
+}
+
+.hlist li li:last-child::after,
+.hlist li dd:last-child::after,
+.hlist li dt:last-child::after,
+.hlist dd li:last-child::after,
+.hlist dd dd:last-child::after,
+.hlist dd dt:last-child::after,
+.hlist dt li:last-child::after,
+.hlist dt dd:last-child::after,
+.hlist dt dt:last-child::after {
+    content: ")";
+    font-weight: normal;
+}
+
+.hlist ol {
+    counter-reset: listitem;
+}
+
+.hlist ol > li {
+    counter-increment: listitem;
+}
+
+.hlist ol > li::before {
+    content: " " counter(listitem) "\a0 ";
+}
+
+.hlist li ol > li:first-child::before,
+.hlist dd ol > li:first-child::before,
+.hlist dt ol > li:first-child::before {
+    content: " (" counter(listitem) "\a0 ";
+}
+
+.plainlist ul,
+.plainlist ol {
+    line-height: inherit;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.plainlist ul li,
+.plainlist ol li {
+    margin-bottom: 0;
+}
+
+/* A link to the page itself (a navbox title, for one): MediaWiki shows it
+   as bold text, not a link. No pointer events, so a click on a navbox title
+   toggles the box instead of reloading the page */
+a.mw-selflink {
+    color: inherit;
+    font-weight: bold;
+    text-decoration: inherit;
+    pointer-events: none;
+}
+
+/* "Derby, England" on one line: the template wraps each part in a <div> */
+.ib-company-locality,
+.ib-company-country {
+    display: inline;
 }
 
 /* Sidebar styling */
