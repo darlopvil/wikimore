@@ -22,7 +22,10 @@ This is a fork of [Wikimore by the Private.coffee Team](https://git.private.coff
 - **Collapsible sections without JavaScript.** MediaWiki builds its collapsible toggles client-side, so collapsible tables arrived permanently expanded. They are converted server-side into native `<details>`/`<summary>` elements.
 - **Sortable tables**, reimplemented in a small dependency-free script, replacing MediaWiki's jquery-tablesorter.
 - **Coordinates** get a map link to OpenStreetMap, replacing Wikipedia's JavaScript-only WikiMiniAtlas gadget. The original GeoHack link is left untouched.
-- Assorted rendering fixes: block quotations, hatnotes, and the `Article/Artículo principal` boxes.
+- **Template layouts.** Wikipedia ships the layout of many templates as TemplateStyles, `<style>` blocks inside the article itself, which Wikimore strips along with every other stylesheet (they can pull images straight from Wikimedia). The most common ones are reproduced in the fork's own CSS: navboxes, horizontal and plain lists, multiple-image collages and company infoboxes.
+- **Wiktionary.** Quotations are folded under each sense, as on Wiktionary itself, using a native `<details>` element instead of its JavaScript gadget. Hidden maintenance categories are left out, and the visible ones are listed in page order inside a proper box.
+- **Incoming links.** Links in the `/<domain>/<path>` form used by redirect extensions such as LibRedirect now work for mobile domains (`es.m.wikipedia.org`) and keep their query string, and `index.php?title=` URLs open the article instead of the home page.
+- Assorted rendering fixes: block quotations, hatnotes, the `Article/Artículo principal` boxes, empty template output, and location-map labels in dark mode.
 
 ## Features
 
